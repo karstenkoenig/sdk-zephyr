@@ -130,6 +130,12 @@ static void do_suspend_to_ram(void)
 
 void pm_state_set(enum pm_state state, uint8_t substate_id)
 {
+#if defined(NRF_SECURE)
+	/* Workaround #1  */
+	uint32_t *p_pcgcs130_reg = (uint32_t *)(0x5F90E000 + 0xc90);
+	*p_pcgcs130_reg = 0x8F;
+	__DSB(); // Better safe than sorry.
+#endif
 	if (state != PM_STATE_SUSPEND_TO_RAM) {
 		k_cpu_idle();
 		return;
