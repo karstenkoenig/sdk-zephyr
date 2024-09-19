@@ -12,12 +12,26 @@ include: base.yaml
 
 properties:
   stmsink:
+    deprecated: true
     type: string
     description: indicates the sink for STM data
     enum:
       - "etr"
       - "tpiu"
       # - "etb" - Not supported yet
+
+  etbsources:
+    type: int
+    description: Bitmask of enabled sources for the ETB sink.
+
+  tpiusources:
+    type: int
+    description: Bitmask of enabled sources for the TPIU sink.
+
+  etrsources:
+    type: int
+    description: Bitmask of enabled sources for the ETR sink.
+
   portconfig:
     type: int
     description: TPIU clock divider - TDD HSFLL / 2^(2 + portconfig)

@@ -2,6 +2,7 @@
  * Copyright (c) 2024 Nordic Semiconductor
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <zephyr/dt-bindings/misc/nordic-tddconf.h>
 
 &tbm {
 	status = "okay";
@@ -9,6 +10,6 @@
 
 &tddconf {
 	status = "okay";
-	stmsink = "etr";
+	etrsources = <NRF_TDDCONF_SOURCE_STMMAINCORE>;
 	portconfig = <0>;
 };
