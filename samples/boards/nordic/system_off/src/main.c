@@ -52,14 +52,8 @@ void print_reset_cause(void)
 int main(void)
 {
 	int rc;
-	const struct device *const cons = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
 	uint32_t nrf_pin_sw1 = 32 * port_sw1 + sw1.pin;
 	bool do_poweroff = true;
-
-	if (!device_is_ready(cons)) {
-		printf("%s: device not ready.\n", cons->name);
-		return 0;
-	}
 
 	if (nrf_gpio_pin_latch_get(nrf_pin_sw1)) {
 		nrf_gpio_pin_latch_clear(nrf_pin_sw1);
@@ -130,19 +124,13 @@ int main(void)
 		printf("Button sw1 pressed, not entering system off\n");
 	}
 
-	rc = pm_device_action_run(cons, PM_DEVICE_ACTION_SUSPEND);
-	if (rc < 0) {
-		printf("Could not suspend console (%d)\n", rc);
-		return 0;
-	}
-
 	if (IS_ENABLED(CONFIG_APP_USE_RETAINED_MEM)) {
 		/* Update the retained state */
 		retained.off_count += 1;
 		retained_update();
 	}
 
-	k_sleep(K_MSEC(4000));
+	k_sleep(K_MSEC(2500));
 	if (do_poweroff) {
 #if CONFIG_SOC_NRF54H20_CPUAPP
 		/* Local RAM0 (TCM) is currently not used so retention can be disabled. */
