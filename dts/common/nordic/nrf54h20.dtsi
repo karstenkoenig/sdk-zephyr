@@ -130,7 +130,13 @@
 		};
 
 		power-states {
-			// substate-id = <0>; is reserved for "idle", cache powered on
+			idle_cache_on: idle_cache_on {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-idle";
+				substate-id = <0>;
+				min-residency-us = <1000>;
+				exit-latency-us = <30>;
+			};
 			// substate-id = <1>; is reserved for "idle-cache-retained"
 			idle_cache_disabled: idle_cache_disabled {
 				compatible = "zephyr,power-state";

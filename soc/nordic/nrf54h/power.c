@@ -16,42 +16,68 @@
 #include "soc.h"
 #include "pm_s2ram.h"
 
+enum cache_mode {
+	CACHE_MODE_OFF,
+	CACHE_MODE_RETAINED,
+	CACHE_MODE_ON,
+};
+
 extern sys_snode_t soc_node;
 
-static void common_suspend(void)
+static void common_suspend(enum cache_mode mode)
 {
-	if (IS_ENABLED(CONFIG_DCACHE)) {
-		/* Flush, disable and power down DCACHE */
-		sys_cache_data_flush_all();
-		sys_cache_data_disable();
-		nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
-							RAMBLOCK_CONTROL_BIT_DCACHE, false);
-	}
+	switch (mode) {
+	case CACHE_MODE_OFF: {
+		if (IS_ENABLED(CONFIG_DCACHE)) {
+			/* Flush, disable and power down DCACHE */
+			sys_cache_data_flush_all();
+			sys_cache_data_disable();
+			nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
+								RAMBLOCK_CONTROL_BIT_DCACHE, false);
+		}
 
-	if (IS_ENABLED(CONFIG_ICACHE)) {
-		/* Disable and power down ICACHE */
-		sys_cache_instr_disable();
-		nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
-							RAMBLOCK_CONTROL_BIT_ICACHE, false);
+		if (IS_ENABLED(CONFIG_ICACHE)) {
+			/* Disable and power down ICACHE */
+			sys_cache_instr_disable();
+			nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
+								RAMBLOCK_CONTROL_BIT_ICACHE, false);
+		}
+		break;
+	}
+	case CACHE_MODE_ON: {
+		break;
+	}
+	default:
+		k_panic();
 	}
 
 	soc_lrcconf_poweron_release(&soc_node, NRF_LRCCONF_POWER_DOMAIN_0);
 }
 
-static void common_resume(void)
+static void common_resume(enum cache_mode mode)
 {
-	if (IS_ENABLED(CONFIG_ICACHE)) {
-		/* Power up and re-enable ICACHE */
-		nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
-							RAMBLOCK_CONTROL_BIT_ICACHE, true);
-		sys_cache_instr_enable();
-	}
+	switch (mode) {
+	case CACHE_MODE_OFF: {
+		if (IS_ENABLED(CONFIG_ICACHE)) {
+			/* Power up and re-enable ICACHE */
+			nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
+								RAMBLOCK_CONTROL_BIT_ICACHE, true);
+			sys_cache_instr_enable();
+		}
 
-	if (IS_ENABLED(CONFIG_DCACHE)) {
-		/* Power up and re-enable DCACHE */
-		nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
-							RAMBLOCK_CONTROL_BIT_DCACHE, true);
-		sys_cache_data_enable();
+		if (IS_ENABLED(CONFIG_DCACHE)) {
+			/* Power up and re-enable DCACHE */
+			nrf_memconf_ramblock_control_enable_set(NRF_MEMCONF, RAMBLOCK_POWER_ID,
+								RAMBLOCK_CONTROL_BIT_DCACHE, true);
+			sys_cache_data_enable();
+		}
+		break;
+	}
+	case CACHE_MODE_ON: {
+		break;
+	}
+	default:
+		k_panic();
 	}
 
 	soc_lrcconf_poweron_request(&soc_node, NRF_LRCCONF_POWER_DOMAIN_0);
@@ -67,7 +93,7 @@ void nrf_poweroff(void)
 	nrf_lrcconf_retain_set(NRF_LRCCONF010, NRF_LRCCONF_POWER_MAIN, false);
 	nrf_lrcconf_retain_set(NRF_LRCCONF010, NRF_LRCCONF_POWER_DOMAIN_0, false);
 #endif
-	common_suspend();
+	common_suspend(CACHE_MODE_OFF);
 
 	nrf_lrcconf_task_trigger(NRF_LRCCONF010, NRF_LRCCONF_TASK_SYSTEMOFFREADY);
 
@@ -83,7 +109,11 @@ static void s2idle_enter(uint8_t substate_id)
 {
 	switch (substate_id) {
 	case 0:
-		/* Substate for idle with cache powered on - not implemented yet. */
+		/* Substate for idle with cache powered on. */
+#if !defined(CONFIG_SOC_NRF54H20_CPURAD)
+		soc_lrcconf_poweron_request(&soc_node, NRF_LRCCONF_POWER_MAIN);
+#endif
+		common_resume(CACHE_MODE_ON);
 		break;
 	case 1: /* Substate for idle with cache retained - not implemented yet. */
 		break;
@@ -91,7 +121,7 @@ static void s2idle_enter(uint8_t substate_id)
 #if !defined(CONFIG_SOC_NRF54H20_CPURAD)
 		soc_lrcconf_poweron_request(&soc_node, NRF_LRCCONF_POWER_MAIN);
 #endif
-		common_suspend();
+		common_suspend(CACHE_MODE_OFF);
 		break;
 	default: /* Unknown substate. */
 		return;
@@ -107,12 +137,16 @@ static void s2idle_exit(uint8_t substate_id)
 {
 	switch (substate_id) {
 	case 0:
-		/* Substate for idle with cache powered on - not implemented yet. */
+		/* Substate for idle with cache powered on. */
+		common_resume(CACHE_MODE_ON);
+#if !defined(CONFIG_SOC_NRF54H20_CPURAD)
+		soc_lrcconf_poweron_release(&soc_node, NRF_LRCCONF_POWER_MAIN);
+#endif
 		break;
 	case 1: /* Substate for idle with cache retained - not implemented yet. */
 		break;
 	case 2: /* Substate for idle with cache disabled. */
-		common_resume();
+		common_resume(CACHE_MODE_OFF);
 #if !defined(CONFIG_SOC_NRF54H20_CPURAD)
 		soc_lrcconf_poweron_release(&soc_node, NRF_LRCCONF_POWER_MAIN);
 #endif
@@ -125,7 +159,7 @@ static void s2idle_exit(uint8_t substate_id)
 /* Resume domain after local suspend to RAM. */
 static void s2ram_exit(void)
 {
-	common_resume();
+	common_resume(CACHE_MODE_OFF);
 #if !defined(CONFIG_SOC_NRF54H20_CPURAD)
 	/* Re-enable domain retention. */
 	nrf_lrcconf_retain_set(NRF_LRCCONF010, NRF_LRCCONF_POWER_DOMAIN_0, true);
@@ -146,7 +180,7 @@ static int sys_suspend_to_ram(void)
 	/* Disable retention */
 	nrf_lrcconf_retain_set(NRF_LRCCONF010, NRF_LRCCONF_POWER_DOMAIN_0, false);
 #endif
-	common_suspend();
+	common_suspend(CACHE_MODE_OFF);
 
 	__set_BASEPRI(0);
 	__ISB();
