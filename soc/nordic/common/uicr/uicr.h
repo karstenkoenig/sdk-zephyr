@@ -200,6 +200,24 @@ struct uicr_periphconf_entry {
 			    (uint32_t)(((_processor) << IRQMAP_IRQ_SINK_PROCESSORID_Pos) &         \
 				       IRQMAP_IRQ_SINK_PROCESSORID_Msk))
 
+#define GPIO_PIN_CNF_CTRLSEL_Pos (28UL)            /*!< Position of CTRLSEL field.                                           */
+#define GPIO_PIN_CNF_CTRLSEL_Msk (0x7UL << GPIO_PIN_CNF_CTRLSEL_Pos) /*!< Bit mask of CTRLSEL field.                         */
+#define GPIO_PIN_CNF_CTRLSEL_Min (0x0UL)           /*!< Min enumerator value of CTRLSEL field.                               */
+#define GPIO_PIN_CNF_CTRLSEL_Max (0x7UL)           /*!< Max enumerator value of CTRLSEL field.                               */
+#define GPIO_PIN_CNF_CTRLSEL_GPIO (0x0UL)          /*!< GPIO peripheral                                                      */
+#define GPIO_PIN_CNF_CTRLSEL_VPR (0x1UL)           /*!< VPR processor                                                        */
+#define GPIO_PIN_CNF_CTRLSEL_GRC (0x1UL)           /*!< GRC system                                                           */
+#define GPIO_PIN_CNF_CTRLSEL_SecureDomain (0x2UL)  /*!< Secure Domain                                                        */
+#define GPIO_PIN_CNF_CTRLSEL_PWM (0x2UL)           /*!< PWM peripheral                                                       */
+#define GPIO_PIN_CNF_CTRLSEL_I3C (0x2UL)           /*!< I3C peripheral                                                       */
+#define GPIO_PIN_CNF_CTRLSEL_Serial (0x3UL)        /*!< SPIM/SPIS/TWIM/TWIS/UARTE peripheral                                 */
+#define GPIO_PIN_CNF_CTRLSEL_HSSPI (0x3UL)         /*!< High-speed SPI peripheral                                            */
+#define GPIO_PIN_CNF_CTRLSEL_RadioCore (0x4UL)     /*!< Radio Core                                                           */
+#define GPIO_PIN_CNF_CTRLSEL_EXMIF (0x4UL)         /*!< EXMIF peripheral                                                     */
+#define GPIO_PIN_CNF_CTRLSEL_CELL (0x4UL)          /*!< Cellular specific (Halti-only)                                       */
+#define GPIO_PIN_CNF_CTRLSEL_DTB (0x6UL)           /*!< Digital Test Bus                                                     */
+#define GPIO_PIN_CNF_CTRLSEL_TND (0x7UL)           /*!< Trace and Debug Subsystem                                            */
+
 /** @brief Add a PERIPHCONF entry for configuring a GPIO PIN_CNF[n] CTRLSEL field value.
  *
  * @param _gpio GPIO instance address.
