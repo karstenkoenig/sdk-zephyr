@@ -43,11 +43,6 @@ __constant U32 _ENFTC = 0x1;
 __constant U32 _TPIU_SYNC_FRAME_COUNT = 0x8;
 __constant U32 _CURRENTPORTSIZE_4 = 0x8;
 
-// TDDCONF
-__constant U32 _TDDCONF_ADDR = 0xBF001000;
-__constant U32 _TRACEPORTSPEED_OFFSET = 0x408;
-__constant U32 _SPEED80MHZ = 0x0;
-
 // CoreSight general
 __constant U32 _CORESIGHT_CLAIMSET_OFFSET = 0xFA0;
 __constant U32 _CORESIGHT_CLAIMCLR_OFFSET = 0xFA4;
@@ -63,6 +58,29 @@ __constant U32 _PIN_CNF6_OFFSET = 0x98;
 __constant U32 _PIN_CNF7_OFFSET = 0x9C;
 __constant U32 _PIN_CNF_TPIU_CLOCK_VALUE = 0x80000503;
 __constant U32 _PIN_CNF_TPIU_DATA_VALUE = 0x00000503;
+
+// Ironside Call IPC
+__constant U32 _IPC_BUFFER_ADDR = 0x2F88FB80;
+__constant U32 _IPC_BUFFER_SIZE = 128;
+__constant U32 _TX_BELLBOARD_ADDR = 0x5F099000;
+__constant U32 _TX_TASK_NUM = 12;
+
+// Ironside call structure offsets (based on struct ironside_call_buf)
+__constant U32 _CALL_BUF_STATUS_ID_OFFSET = 0x0;    // uint16_t status | uint16_t id
+__constant U32 _CALL_BUF_ARGS_OFFSET = 0x4;      // uint32_t args[7]
+
+// Ironside call constants
+__constant U32 _IRONSIDE_CALL_STATUS_IDLE = 0;
+__constant U32 _IRONSIDE_CALL_STATUS_SUCCESS = 1;
+__constant U32 _IRONSIDE_CALL_STATUS_REQ = 6;
+
+
+__constant U32 _IRONSIDE_SE_CALL_ID_TDD_V0 = 4;
+__constant U32 _IRONSIDE_SE_TDD_CONFIG_ON_DEFAULT = 2;
+
+// Bellboard task/event register offsets
+__constant U32 _BELLBOARD_TASK_OFFSET = 0x0;     // Task base
+__constant U32 _TASK_TRIGGER_VALUE = 0x1;
 
 // Settings
 __constant U32 _DEBUGGER_CLAIM_MASK = 0x2;
@@ -87,6 +105,63 @@ void _CSLock(U32 addr)
 void _CSClaim(U32 addr)
 {
 	JLINK_MEM_WriteU32(addr + _CORESIGHT_CLAIMSET_OFFSET, _DEBUGGER_CLAIM_MASK);
+}
+
+// Configure the pins as outputs with high drive, plus set clock bit for clock pin.
+int _ConfigureTracePins(void)
+{
+	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF3_OFFSET, _PIN_CNF_TPIU_CLOCK_VALUE);
+	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF4_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
+	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF5_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
+	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF6_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
+	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF7_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
+
+	return 0;
+}
+
+// Call ironside tdd service with default power on mode
+int _PowerUpTDD(void)
+{
+	U32 tx_task_addr;
+	U32 status_and_id_addr;
+	U32 status_and_id;
+	U32 call_args0;
+	U32 call_args0_addr;
+
+	tx_task_addr = _TX_BELLBOARD_ADDR + _BELLBOARD_TASK_OFFSET + (_TX_TASK_NUM * 4);
+	status_and_id_addr = _IPC_BUFFER_ADDR + _CALL_BUF_STATUS_ID_OFFSET;
+	call_args0_addr = _IPC_BUFFER_ADDR + _CALL_BUF_ARGS_OFFSET;
+
+	// Check if buffer is available (status should be IDLE)
+	status_and_id = JLINK_MEM_ReadU32(status_and_id_addr);
+	if ((status_and_id & 0xFFFF) != _IRONSIDE_CALL_STATUS_IDLE) {
+		JLINK_SYS_Report1("ERROR: Ironside call failed: Not idle slot0: ", status_and_id);
+		return -1;
+	}
+
+	// Setup the request
+	JLINK_MEM_WriteU32(status_and_id_addr, _IRONSIDE_SE_CALL_ID_TDD_V0 << 16 | _IRONSIDE_CALL_STATUS_REQ);
+	JLINK_MEM_WriteU32(call_args0_addr, _IRONSIDE_SE_TDD_CONFIG_ON_DEFAULT);
+
+	// Trigger the bellboard task to send the request
+	JLINK_MEM_WriteU32(tx_task_addr, _TASK_TRIGGER_VALUE);
+	JLINK_SYS_Sleep(100);
+
+	// Check if the call was successful
+	status_and_id = JLINK_MEM_ReadU32(status_and_id_addr);
+	if ((status_and_id & 0xFFFF) != _IRONSIDE_CALL_STATUS_SUCCESS) {
+		JLINK_SYS_Report1("ERROR: Ironside call failed: Call not handled successfully: ", status_and_id);
+		return -1;
+	}
+
+	// Check the return code from the TDD service
+	call_args0 = JLINK_MEM_ReadU32(call_args0_addr);
+	if (call_args0 != 0) {
+		JLINK_SYS_Report1("ERROR: Ironside call failed: TDD service failed: ", call_args0);
+		return -1;
+	}
+
+	return 0;  // Success
 }
 
 // Set up CoreSight and other necessary configuration so to enable ETM -> TPIU tracing.
@@ -137,13 +212,6 @@ int _SetupETMTPIUTrace(void)
 	_CSClaim(_TPIU_ADDR);
 	_CSLock(_TPIU_ADDR);
 
-	// Configure the trace pins
-	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF3_OFFSET, _PIN_CNF_TPIU_CLOCK_VALUE);
-	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF4_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
-	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF5_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
-	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF6_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
-	JLINK_MEM_WriteU32(_P7_ADDR + _PIN_CNF7_OFFSET, _PIN_CNF_TPIU_DATA_VALUE);
-
 	return 0;
 }
 
@@ -160,8 +228,16 @@ int ConfigTargetSettings(void)
 
 int OnTraceStart(void)
 {
+	U32 tdd_result;
+
 	// Set up CoreSight if not already configured
 	if (_needCoresightSetup) {
+
+		_ConfigureTracePins();
+		tdd_result = _PowerUpTDD();
+		if (tdd_result) {
+			return -1;
+		}
 		_SetupETMTPIUTrace();
 		_needCoresightSetup = 0;
 	}
