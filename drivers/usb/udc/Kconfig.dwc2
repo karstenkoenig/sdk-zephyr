@@ -59,3 +59,6 @@ config UDC_DWC2_USBHS_VBUS_READY_TIMEOUT
 	  UDC DWC2 USBHS VBUS ready event timeout. If the VBUS is not ready
 	  and the Nordic USBHS controller is used, the udc_enable() is
 	  blocked for this amount of time. Set it to zero to wait forever.
+
+config UDC_DWC2_123BRICKME
+	bool "Access the DW core before the clock is started to brick the device"

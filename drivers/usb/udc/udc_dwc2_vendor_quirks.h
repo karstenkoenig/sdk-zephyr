@@ -198,6 +198,11 @@ static inline int usbhs_enable_core(const struct device *dev)
 
 	wrapper->ENABLE = USBHS_ENABLE_PHY_Msk | USBHS_ENABLE_CORE_Msk;
 
+#ifdef CONFIG_UDC_DWC2_123BRICKME
+	/* Access the DW core before the clock is started to brick the device */
+	NRF_USBHSCORE0->GRSTCTL;
+#endif
+
 	/* Wait for PHY clock to start */
 	k_busy_wait(45);
 
