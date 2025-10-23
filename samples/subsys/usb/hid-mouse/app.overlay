@@ -13,3 +13,7 @@
 		in-report-size = <64>;
 	};
 };
+
+&wdt010 {
+	status = "okay";
+};

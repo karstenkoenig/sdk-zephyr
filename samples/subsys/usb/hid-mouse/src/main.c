@@ -12,6 +12,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/watchdog.h>
 #include <zephyr/input/input.h>
 #include <zephyr/sys/util.h>
 
@@ -103,9 +104,29 @@ struct hid_device_ops mouse_ops = {
 
 int main(void)
 {
+	const struct wdt_timeout_cfg wdt_config = { .flags = WDT_FLAG_RESET_SOC,
+						    .window.min = 0,
+						    .window.max = 2000U };
+	const struct device *const wdt = DEVICE_DT_GET(DT_ALIAS(watchdog0));
 	struct usbd_context *sample_usbd;
 	const struct device *hid_dev;
 	int ret;
+	int wdt_channel_id;
+
+	wdt_channel_id = wdt_install_timeout(wdt, &wdt_config);
+	if (wdt_channel_id < 0) {
+		LOG_ERR("Watchdog timeout installing error: %d", wdt_channel_id);
+		return 0;
+	}
+
+	ret = wdt_setup(wdt, WDT_OPT_PAUSE_HALTED_BY_DBG | WDT_OPT_PAUSE_IN_SLEEP);
+
+	if (ret < 0) {
+		LOG_ERR("Watchdog setup error: %d", ret);
+		return 0;
+	}
+
+	LOG_INF("Watchdog started");
 
 	if (!gpio_is_ready_dt(&led0)) {
 		LOG_ERR("LED device %s is not ready", led0.port->name);
@@ -149,7 +170,17 @@ int main(void)
 	while (true) {
 		UDC_STATIC_BUF_DEFINE(report, MOUSE_REPORT_COUNT);
 
-		k_msgq_get(&mouse_msgq, &report, K_FOREVER);
+		ret = k_msgq_get(&mouse_msgq, &report, K_MSEC(1000));
+
+		/* Feed watchdog after wakeup */
+		wdt_feed(wdt, wdt_channel_id);
+
+		LOG_INF("Hello from USB HID mouse sample!");
+
+		if (ret == -EAGAIN) {
+			LOG_INF("No mouse event in the last second");
+			continue;
+		}
 
 		if (!mouse_ready) {
 			LOG_INF("USB HID device is not ready");
