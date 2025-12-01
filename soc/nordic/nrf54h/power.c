@@ -167,6 +167,12 @@ static void s2idle_exit(uint8_t substate_id)
 /* Resume domain after local suspend to RAM. */
 static void s2ram_exit(void)
 {
+
+#if !defined(CONFIG_SOC_NRF54H20_CPURAD)
+	/* Re-enable ABB. */
+	NRF_ABB->MODE = 0;
+#endif
+
 	common_resume();
 #if !defined(CONFIG_SOC_NRF54H20_CPURAD)
 	/* Re-enable domain retention. */
@@ -184,11 +190,16 @@ static int sys_suspend_to_ram(void)
 					  NRF_RESETINFO_RESETREAS_LOCAL_UNRETAINED_MASK);
 	nrf_resetinfo_restore_valid_set(NRF_RESETINFO, true);
 
-#if !defined(CONFIG_SOC_NRF54H20_CPURAD)
-	/* Disable retention */
+#if defined(CONFIG_SOC_NRF54H20_CPUAPP)
+	/* Disable retention, needs to stay enabled for cpusec! */
 	nrf_lrcconf_retain_set(NRF_LRCCONF010, NRF_LRCCONF_POWER_DOMAIN_0, false);
 #endif
 	common_suspend();
+
+#if !defined(CONFIG_SOC_NRF54H20_CPURAD)
+	/* Disable ABB just before sleep to save power */
+	NRF_ABB->MODE = 2 << 4;
+#endif
 
 	__set_BASEPRI(0);
 	__ISB();
