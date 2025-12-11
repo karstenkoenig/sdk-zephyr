@@ -146,6 +146,15 @@
 			s2ram: s2ram {
 				compatible = "zephyr,power-state";
 				power-state-name = "suspend-to-ram";
+				substate-id = <0>;
+				min-residency-us = <2000>;
+				exit-latency-us = <33>;
+			};
+			// Suspend to RAM with active domain retained
+			s2ram_act_ret: s2ram_act_ret {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-ram";
+				substate-id = <1>;
 				min-residency-us = <2000>;
 				exit-latency-us = <33>;
 			};
